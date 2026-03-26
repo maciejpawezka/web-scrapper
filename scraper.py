@@ -1,4 +1,4 @@
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 import smtplib
 from email.mime.text import MIMEText
@@ -17,7 +17,8 @@ def get_current_price():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    response = requests.get(URL, headers=headers)
+    scraper = cloudscraper.create_scraper()
+    response = scraper.get(URL, headers=headers)
     response.raise_for_status()
     
     soup = BeautifulSoup(response.text, 'html.parser')
