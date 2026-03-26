@@ -25,7 +25,19 @@ def get_current_price():
     
     price_div = soup.find('div', class_='eoProductStylePrice')
     if not price_div:
-        raise ValueError("Nie znaleziono ceny na stronie.")
+        
+        print("\n--- DEBUG: NIE ZNALEZIONO KLASY eoProductStylePrice ---")
+        title = soup.title.string if soup.title else "Brak tytułu"
+        print(f"Tytuł strony: {title}")
+        body_text = soup.body.get_text(separator=' ', strip=True)[:500] if soup.body else "Brak tagu body"
+        print(f"Początek tekstu na stronie: {body_text}\n---------------------------------------------------")
+        
+        
+        fallback = soup.find(string=re.compile(r'\d+,\d+\s*(zł|PLN)'))
+        if fallback:
+            print(f"UWAGA: Znaleziono inną cenę jako tekst: {fallback.strip()}")
+            
+        raise ValueError("Nie znaleziono ceny na stronie (możliwa zmiana struktury HTML lub blokada).")
         
     price_text = price_div.get_text(strip=True)
     match = re.search(r'([\d\s]+,\d+)', price_text.replace('\xa0', ' '))
