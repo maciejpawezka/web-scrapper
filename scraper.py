@@ -23,30 +23,27 @@ def get_current_price():
     
     soup = BeautifulSoup(response.text, 'html.parser')
     
-    price_div = soup.find('div', class_='eoProductStylePrice')
-    if not price_div:
+    # Zamiast szukać najwyższej kwoty, szukamy tekstu "w tym VAT", 
+    # który zawsze występuje z główną ceną na górze strony (i nie ma go przy wersjach niżej).
+    vat_tags = soup.find_all(string=re.compile(r'w\s+tym\s+VAT', re.IGNORECASE))
+    
+    if not vat_tags:
+        raise ValueError("Nie znaleziono napisu 'w tym VAT' na całej stronie. Prawdopodobna blokada bota lub duża zmiana strony.")
         
-        print("\n--- DEBUG: NIE ZNALEZIONO KLASY eoProductStylePrice ---")
-        title = soup.title.string if soup.title else "Brak tytułu"
-        print(f"Tytuł strony: {title}")
-        body_text = soup.body.get_text(separator=' ', strip=True)[:500] if soup.body else "Brak tagu body"
-        print(f"Początek tekstu na stronie: {body_text}\n---------------------------------------------------")
-        
-        
-        fallback = soup.find(string=re.compile(r'\d+,\d+\s*(zł|PLN)'))
-        if fallback:
-            print(f"UWAGA: Znaleziono inną cenę jako tekst: {fallback.strip()}")
-            
-        raise ValueError("Nie znaleziono ceny na stronie (możliwa zmiana struktury HTML lub blokada).")
-        
-    price_text = price_div.get_text(strip=True)
+    # Bierzemy pierwszy blok z "w tym VAT" od góry (to zawsze główny produkt na stronie Edel-Optics)
+    first_vat_tag = vat_tags[0]
+    
+    # Cofnijmy się o dwa poziomy do góry w kodzie HTML, aby złapać blok obejmujący i tekst "w tym VAT" i samą cenę
+    price_block = first_vat_tag.parent.parent
+    price_text = price_block.get_text(separator=' ', strip=True)
+    
     match = re.search(r'([\d\s]+,\d+)', price_text.replace('\xa0', ' '))
     if match:
         clean_price_str = match.group(1).replace(' ', '')
         amount = float(clean_price_str.replace(',', '.'))
         return amount, price_text
-    
-    raise ValueError(f"Nie udało się przetworzyć ceny: {price_text}")
+        
+    raise ValueError(f"Znaleziono sekcję 'w tym VAT', ale nie udało się wyciągnąć z niej cyfr: {price_text}")
 
 def get_last_price():
     if os.path.exists(PRICE_FILE):
