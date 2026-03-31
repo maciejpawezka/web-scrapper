@@ -31,19 +31,19 @@ def get_edel_optics_price(url):
     
     vat_tags = soup.find_all(string=re.compile(r'w\s+tym\s+VAT', re.IGNORECASE))
     if not vat_tags:
-        raise ValueError(f"Nie znaleziono napisu 'w tym VAT' na całej stronie.")
+        raise ValueError(f"Nie znaleziono napisu 'w tym VAT' na calej stronie.")
         
     first_vat_tag = vat_tags[0]
     price_block = first_vat_tag.parent.parent
     price_text = price_block.get_text(separator=' ', strip=True)
     
-    match = re.search(r'([\d\s]+,\d+)', price_text.replace('\xa0', ' '))
-    if match:
-        clean_price_str = match.group(1).replace(' ', '')
+    matches = re.findall(r'([\d\s]+,\d+)', price_text.replace('\xa0', ' '))
+    if matches:
+        clean_price_str = matches[-1].replace(' ', '')
         amount = float(clean_price_str.replace(',', '.'))
         return amount
         
-    raise ValueError(f"Nie udało się wyciągnąć cyfr ze stringa: {price_text}")
+    raise ValueError(f"Nie udalo sie wyciagnac cyfr ze stringa: {price_text}")
 
 def get_dropbox_date():
     headers = {
@@ -86,11 +86,10 @@ def send_email_notification(changes):
         return
         
     if not all([SENDER_EMAIL, SENDER_PASSWORD, RECEIVER_EMAIL]):
-        print("Brak konfiguracji e-mail. Pomięto wysyłanie wiadomości.")
+        print("Brak konfiguracji e-mail.")
         return
 
-    subject = "AKTUALIZACJA: Powiadamiator zgłasza zmiany!"
-    
+    subject = "AKTUALIZACJA: Powiadamiator zglasza zmiany!"
     body = "Oto podsumowanie najnowszych zmian:\n\n"
     for change in changes:
         body += f"🔹 {change}\n\n"
@@ -107,16 +106,15 @@ def send_email_notification(changes):
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print("E-mail powiadomieniowy został wysłany.")
+        print("E-mail wyslany.")
     except Exception as e:
-        print(f"Błąd podczas wysyłania e-maila: {e}")
+        print(f"Blad wysylania: {e}")
 
 def main():
     old_data = load_data()
     new_data = dict(old_data)
     changes = []
     
-    # 1. Sprawdzanie Ceny Okularów
     for name, url in EDEL_OPTICS_URLS.items():
         print(f"Sprawdzanie: {name}...")
         try:
@@ -128,40 +126,42 @@ def main():
                 changes.append(f"Rozpoczęto śledzenie {name}. Aktywna cena to: {current_price} PLN\nLink: {url}")
                 new_data[name] = current_price
             elif current_price != last_price:
-                kierunek = "SPADŁA" if current_price < last_price else "WZROSŁA"
-                changes.append(f"CENA {kierunek} ({name})!\nPoprzednia cena: {last_price} PLN\nNowa cena: {current_price} PLN\nLink: {url}")
-                new_data[name] = current_price
+                diff_percent = abs(current_price - last_price) / last_price * 100
+                if diff_percent >= 1.0:
+                    kierunek = "SPADŁA" if current_price < last_price else "WZROSŁA"
+                    changes.append(f"CENA {kierunek} ({name})!\nPoprzednia: {last_price} PLN\nNowa: {current_price} PLN\nLink: {url}")
+                    new_data[name] = current_price
+                else:
+                    print(f"  Zmiana o {diff_percent:.2f}% zignorowana (<1%).")
+                    new_data[name] = current_price
             else:
                 print(f"  Brak zmian dla {name}.")
         except Exception as e:
-            print(f"  Błąd podczas sprawdzania {name}: {e}")
+            print(f"  Blad ({name}): {e}")
 
-    # 2. Sprawdzanie Dropboxa
-    print("Sprawdzanie: Plik Excel z wynikami (Dropbox)...")
+    print("Sprawdzanie: Dropbox...")
     try:
         current_date = get_dropbox_date()
-        print(f"  Data modyfikacji na chmurze: {current_date}")
+        print(f"  Data na chmurze: {current_date}")
         last_date = old_data.get("DropboxExcel")
         
         if last_date is None:
-            changes.append(f"Rozpoczęto śledzenie pliku. Obecna data modyfikacji: {current_date}\nLink: {DROPBOX_URL}")
+            changes.append(f"Rozpoczęto śledzenie pliku. Data modyfikacji: {current_date}\nLink: {DROPBOX_URL}")
             new_data["DropboxExcel"] = current_date
         elif current_date != last_date:
-            changes.append(f"ZAKTUALIZOWANO PLIK! Odkryto nowszą datę modyfikacji.\nNowa data: {current_date} (Zastępuje: {last_date})\nLink: {DROPBOX_URL}")
+            changes.append(f"ZAKTUALIZOWANO PLIK! Nowa data: {current_date} (Zastępuje: {last_date})\nLink: {DROPBOX_URL}")
             new_data["DropboxExcel"] = current_date
         else:
-            print("  Brak nowości na Dropboxie.")
-            
+            print("  Brak nowosci.")
     except Exception as e:
-        print(f"  Błąd podczas sprawdzania Dropboxa: {e}")
+        print(f"  Blad Dropbox: {e}")
 
-    # Aktualizacja stanu
     if changes:
-        print("Wykryto zmiany! Wysyłam maila...")
+        print("Wysylam maila...")
         send_email_notification(changes)
         save_data(new_data)
     else:
-        print("Nie wykryto żadnych różnic w obserwowanych celach. Koniec działania.")
+        print("Brak zmian do wyslania. Koniec.")
 
 if __name__ == "__main__":
     main()
